@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -105,6 +106,7 @@ export default function Home() {
   const [isRegistered, setIsRegistered] = useState(false);
   const [activities, setActivities] = useState<Activity[]>(DEFAULT_ACTIVITIES);
   const [roxTimes, setRoxTimes] = useState<RoxTime[]>(buildDefaultRoxTimes);
+  const [hasSynced, setHasSynced] = useState(false);
 
   const [activeTarget, setActiveTarget] = useState<TimerTarget>(null);
   const [isRunning, setIsRunning] = useState(false);
@@ -146,6 +148,29 @@ export default function Home() {
   const totalActivityMs = activities.reduce((sum, a) => sum + a.elapsedMs, 0);
   const totalRoxMs = roxTimes.reduce((sum, r) => sum + r.elapsedMs, 0);
   const allComplete = completedCount === 12;
+
+  useEffect(() => {
+    if (allComplete && !hasSynced) {
+      const splits = activities.map(a => ({
+        id: a.id,
+        name: a.name,
+        timeMs: a.elapsedMs,
+        roxMs: roxTimes.find(r => r.afterActivityId === a.id)?.elapsedMs || 0
+      }));
+
+      supabase.from('race_results').insert([
+        {
+          athlete_bib: athleteBib || "UNKNOWN",
+          athlete_name: athleteName || "UNKNOWN",
+          total_time_ms: raceElapsedMs,
+          splits
+        }
+      ]).then(({ error }) => {
+        if (!error) setHasSynced(true);
+        else console.error("Sync Failed", error);
+      });
+    }
+  }, [allComplete, hasSynced, activities, roxTimes, athleteBib, athleteName, raceElapsedMs]);
 
   const isActivityActive = (id: number) => activeTarget?.kind === "activity" && activeTarget.id === id;
   const isRoxActive = (afterId: number) => activeTarget?.kind === "rox" && activeTarget.afterActivityId === afterId;
@@ -438,6 +463,21 @@ export default function Home() {
 
   const handleComplete = activeTarget?.kind === "activity" ? completeActivity : activeTarget?.kind === "rox" ? completeRox : undefined;
 
+  const checkBib = async (bib: string) => {
+    if (!bib) return;
+    try {
+      const { data, error } = await supabase.from('athletes').select('*').eq('bib', bib).limit(1).single();
+      if (data && !error) {
+        setAthleteName(data.name);
+        if (data.phone) setAthletePhone(data.phone);
+      } else {
+        console.log("No exact match found in Supabase.");
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   if (!isRegistered) {
     return (
       <div className="fixed inset-0 bg-black text-white overflow-hidden flex flex-col font-sans px-6 pt-12 pb-6">
@@ -447,12 +487,12 @@ export default function Home() {
 
           <div className="space-y-6">
             <div>
-              <label className="text-gray-500 text-sm font-bold tracking-widest block mb-2">FULL NAME</label>
-              <input type="text" value={athleteName} onChange={e => setAthleteName(e.target.value)} className="w-full bg-[#111] border-b-2 border-[#333] focus:border-[#CCFF00] outline-none py-3 text-xl placeholder-gray-700 transition-colors" placeholder="e.g. Hunter McIntyre" />
+              <label className="text-gray-500 text-sm font-bold tracking-widest block mb-2">BIB NUMBER</label>
+              <input type="text" value={athleteBib} onChange={e => { setAthleteBib(e.target.value); if (e.target.value.length >= 2) checkBib(e.target.value); }} className="w-full bg-[#111] border-b-2 border-[#333] focus:border-[#CCFF00] outline-none py-3 text-xl placeholder-gray-700 transition-colors" placeholder="e.g. 402" />
             </div>
             <div>
-              <label className="text-gray-500 text-sm font-bold tracking-widest block mb-2">BIB NUMBER</label>
-              <input type="text" value={athleteBib} onChange={e => setAthleteBib(e.target.value)} className="w-full bg-[#111] border-b-2 border-[#333] focus:border-[#CCFF00] outline-none py-3 text-xl placeholder-gray-700 transition-colors" placeholder="e.g. 402" />
+              <label className="text-gray-500 text-sm font-bold tracking-widest block mb-2">FULL NAME</label>
+              <input type="text" value={athleteName} onChange={e => setAthleteName(e.target.value)} className="w-full bg-[#111] border-b-2 border-[#333] focus:border-[#CCFF00] outline-none py-3 text-xl placeholder-gray-700 transition-colors" placeholder="e.g. Hunter McIntyre" />
             </div>
             <div>
               <label className="text-gray-500 text-sm font-bold tracking-widest block mb-2">PHONE NUMBER</label>
@@ -515,7 +555,7 @@ export default function Home() {
 
                 <div className="text-gray-500 text-xs font-bold tracking-widest mb-1">SYNC STATUS</div>
                 <div className="text-white text-base flex items-center gap-2">
-                  <Check className="w-5 h-5 text-green-500" /> Saved Locally
+                  <Check className={`w-5 h-5 ${hasSynced ? "text-green-500" : "text-gray-500"}`} /> {hasSynced ? "Synced to Cloud" : "Saving Locally..."}
                 </div>
               </div>
             </div>
