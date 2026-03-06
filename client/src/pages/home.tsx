@@ -482,28 +482,49 @@ export default function Home() {
   if (!isLanded) {
     return (
       <div
-        className="fixed inset-0 bg-[#6b1e22] text-white overflow-hidden flex flex-col items-center justify-center font-sans px-6"
-        style={{ backgroundImage: 'linear-gradient(to bottom right, #7a2228, #300d0f)' }}
+        className="fixed inset-0 bg-[#8b4549] text-white overflow-hidden flex flex-col font-sans"
+        style={{ backgroundImage: 'linear-gradient(to bottom right, #8b4549 0%, #612e31 70%)' }}
       >
-        <div className="text-center relative flex flex-col items-center">
-          <h1 className="text-[6rem] sm:text-[8rem] font-black italic leading-[0.85] tracking-tighter">HYFIT</h1>
-          <h1 className="text-[6rem] sm:text-[8rem] font-black italic leading-[0.85] tracking-tighter relative z-10">GAMES</h1>
+        {/* Top Logo Mock */}
+        <div className="flex flex-col items-center mt-12 mb-auto z-10 w-full">
+          <svg width="40" height="20" viewBox="0 0 40 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M20 0L40 10L36 14L20 6L4 14L0 10L20 0Z" fill="#c32227" />
+            <path d="M20 6L32 12L29 15L20 10.5L11 15L8 12L20 6Z" fill="#c32227" />
+          </svg>
+          <div className="text-2xl font-black mt-1 tracking-widest">HYFIT</div>
+        </div>
 
-          <div className="absolute top-[30%] right-[-15%] sm:right-[-25%] bg-[#cc292b] text-white font-black italic transform rotate-[5deg] px-4 py-1 text-4xl sm:text-5xl border-[3px] border-white shadow-xl z-20">
-            1.1
+        {/* Center Main Type */}
+        <div className="text-center relative flex flex-col items-center justify-center z-10 mb-8 w-full">
+          <h1 className="text-[6rem] sm:text-[8rem] font-black italic leading-[0.85] tracking-tighter" style={{ textShadow: '0 4px 20px rgba(0,0,0,0.3)' }}>HYFIT</h1>
+          <h1 className="text-[6rem] sm:text-[8rem] font-black italic leading-[0.85] tracking-tighter relative z-10" style={{ textShadow: '0 4px 20px rgba(0,0,0,0.3)' }}>GAMES</h1>
+
+          <div className="absolute top-[30%] right-[0%] sm:right-[15%] bg-[#c32227] text-white font-black italic transform rotate-[5deg] px-3 py-1 text-4xl sm:text-5xl border-[2px] border-white shadow-xl z-20">
+            2.1
+          </div>
+
+          <div className="bg-[#c32227] text-white font-bold text-sm sm:text-lg px-6 py-2 mt-4 transform rotate-[-2deg] shadow-lg">
+            Its official. We are Taken.
           </div>
         </div>
 
-        <div className="bg-[#cc292b] text-white font-bold text-2xl sm:text-3xl px-8 py-3 mt-8 transform rotate-[-2deg] shadow-lg border-2 border-white/20">
-          The Race is ON!
-        </div>
-
+        {/* Invisible enter button stretched across */}
         <button
           onClick={() => setIsLanded(true)}
-          className="absolute bottom-16 bg-white text-[#cc292b] font-black py-5 px-16 rounded-[32px] tracking-tighter text-2xl active:scale-95 transition-all shadow-[0_0_40px_rgba(255,255,255,0.2)]"
+          className="absolute inset-x-0 inset-y-0 bottom-1/3 z-30 opacity-0 bg-white"
         >
-          OPEN TIMER
+          OPEN
         </button>
+
+        {/* Bottom Bar: Powered By Wone */}
+        <div className="bg-[#6b353a] h-[30%] w-full flex flex-col items-center justify-center z-20 relative px-6 text-center border-t-4 border-[#502428]">
+          <div className="text-white font-extrabold tracking-[0.2em] text-lg sm:text-xl mb-4">POWERED BY</div>
+
+          <div className="bg-[#a89b9b] px-8 py-3 flex items-baseline justify-center">
+            <span className="text-[#d95d39] text-5xl font-serif italic font-bold" style={{ fontFamily: 'Georgia, serif' }}>W</span>
+            <span className="text-[#3b3b3b] text-4xl font-bold italic tracking-tighter">one</span>
+          </div>
+        </div>
       </div>
     );
   }
