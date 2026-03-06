@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Hyrox Timer</string>
+    <string name="title_activity_main">Hyrox Timer</string>
+    <string name="package_name">com.wone.hyroxtimer</string>
+    <string name="custom_url_scheme">com.wone.hyroxtimer</string>
+</resources>

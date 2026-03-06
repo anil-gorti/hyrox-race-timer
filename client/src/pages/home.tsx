@@ -100,6 +100,9 @@ type TimerTarget = { kind: "activity"; id: number } | { kind: "rox"; afterActivi
 
 export default function Home() {
   const [athleteName, setAthleteName] = useState("");
+  const [athletePhone, setAthletePhone] = useState("");
+  const [athleteBib, setAthleteBib] = useState("");
+  const [isRegistered, setIsRegistered] = useState(false);
   const [activities, setActivities] = useState<Activity[]>(DEFAULT_ACTIVITIES);
   const [roxTimes, setRoxTimes] = useState<RoxTime[]>(buildDefaultRoxTimes);
 
@@ -435,483 +438,202 @@ export default function Home() {
 
   const handleComplete = activeTarget?.kind === "activity" ? completeActivity : activeTarget?.kind === "rox" ? completeRox : undefined;
 
-  function renderTimerControls(testIdPrefix: string) {
+  if (!isRegistered) {
     return (
-      <div className="mt-5 pt-4 border-t border-border/50">
-        <div className="text-center mb-5">
-          <div className="flex items-center justify-center gap-2 mb-2">
-            {isRunning && (
-              <span className="relative flex h-2.5 w-2.5">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-chart-5 opacity-75" />
-                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-chart-5" />
-              </span>
-            )}
-            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider" aria-live="polite">
-              {isRunning ? "Running" : timerMs > 0 ? "Paused" : "Ready"}
-            </span>
-          </div>
-          <div
-            className={`text-5xl sm:text-6xl font-mono font-bold tabular-nums tracking-wider transition-colors ${
-              isRunning ? "text-foreground" : "text-muted-foreground"
-            }`}
-            data-testid={`text-${testIdPrefix}-timer`}
-          >
-            {formatTime(timerMs)}
+      <div className="fixed inset-0 bg-black text-white overflow-hidden flex flex-col font-sans px-6 pt-12 pb-6">
+        <div className="flex-1">
+          <div className="text-[#CCFF00] font-bold tracking-widest text-sm mb-8">HYFIT GAMES</div>
+          <h1 className="text-4xl font-extrabold mb-8">Athlete<br />Check-in</h1>
+
+          <div className="space-y-6">
+            <div>
+              <label className="text-gray-500 text-sm font-bold tracking-widest block mb-2">FULL NAME</label>
+              <input type="text" value={athleteName} onChange={e => setAthleteName(e.target.value)} className="w-full bg-[#111] border-b-2 border-[#333] focus:border-[#CCFF00] outline-none py-3 text-xl placeholder-gray-700 transition-colors" placeholder="e.g. Hunter McIntyre" />
+            </div>
+            <div>
+              <label className="text-gray-500 text-sm font-bold tracking-widest block mb-2">BIB NUMBER</label>
+              <input type="text" value={athleteBib} onChange={e => setAthleteBib(e.target.value)} className="w-full bg-[#111] border-b-2 border-[#333] focus:border-[#CCFF00] outline-none py-3 text-xl placeholder-gray-700 transition-colors" placeholder="e.g. 402" />
+            </div>
+            <div>
+              <label className="text-gray-500 text-sm font-bold tracking-widest block mb-2">PHONE NUMBER</label>
+              <input type="tel" value={athletePhone} onChange={e => setAthletePhone(e.target.value)} className="w-full bg-[#111] border-b-2 border-[#333] focus:border-[#CCFF00] outline-none py-3 text-xl placeholder-gray-700 transition-colors" placeholder="e.g. +1 234 567 890" />
+            </div>
           </div>
         </div>
-
-        <div className="grid grid-cols-2 sm:flex sm:items-center sm:justify-center gap-2 sm:gap-3">
-          {!isRunning ? (
-            <Button size="lg" data-testid={`button-${testIdPrefix}-start`} onClick={startTimer} className="col-span-1">
-              <Play className="mr-2 h-5 w-5" />
-              {timerMs > 0 ? "Resume" : "Start"}
-            </Button>
-          ) : (
-            <Button size="lg" variant="secondary" data-testid={`button-${testIdPrefix}-pause`} onClick={pauseTimer} className="col-span-1">
-              <Pause className="mr-2 h-5 w-5" />
-              Pause
-            </Button>
-          )}
-
-          <Button
-            size="lg"
-            variant="secondary"
-            data-testid={`button-${testIdPrefix}-reset`}
-            onClick={resetCurrentTimer}
-            disabled={timerMs === 0}
-            className="col-span-1"
-          >
-            <RotateCcw className="mr-2 h-4 w-4" />
-            Reset
-          </Button>
-
-          <Button
-            size="lg"
-            data-testid={`button-${testIdPrefix}-complete`}
-            onClick={handleComplete}
-            className="col-span-2 sm:col-span-1"
-          >
-            <Check className="mr-2 h-5 w-5" />
-            Done
-          </Button>
-        </div>
+        <button
+          onClick={() => setIsRegistered(true)}
+          disabled={!athleteName || !athleteBib}
+          className="w-full bg-[#CCFF00] text-black font-extrabold py-5 rounded-[24px] tracking-tighter text-2xl active:bg-[#aacc00] disabled:opacity-50 disabled:bg-[#333] disabled:text-gray-500 transition-all font-sans"
+        >
+          READY TO RACE
+        </button>
       </div>
     );
   }
 
+  // The giant OLED mobile rendering layout
   return (
-    <div className="min-h-screen bg-background">
-      <div className="sticky top-0 z-50 bg-primary text-primary-foreground">
-        <div className="max-w-2xl mx-auto px-4 py-5">
-          <div className="flex items-center justify-between gap-4">
-            <div>
-              <h1 className="text-2xl font-bold tracking-tight" data-testid="text-title">HYFIT GAMES | BANGALORE</h1>
-              <p className="text-sm opacity-75">Race Timer</p>
-            </div>
-            <div className="text-right">
-              <div className="text-3xl font-mono font-bold tabular-nums" data-testid="text-race-time">
-                {formatRaceTime(raceElapsedMs)}
-              </div>
-              <p className="text-xs opacity-75">Race Clock</p>
-            </div>
-          </div>
+    <div className="fixed inset-0 bg-black text-white overflow-hidden flex flex-col font-sans select-none" style={{ WebkitTapHighlightColor: 'transparent' }}>
 
-          <div className="mt-4 flex items-center gap-3">
-            <div className="flex-1 h-2 bg-primary-foreground/20 rounded-full">
+      {/* Top Status Bar */}
+      <div className="h-20 w-full flex items-center justify-between px-6 bg-black z-20 shrink-0 border-b border-[#1A1A1A]">
+        <div>
+          <div className="text-xs text-gray-500 uppercase tracking-widest font-bold mb-1">RACE TIME</div>
+          <div className="text-xl font-mono text-[#CCFF00] font-medium">{formatRaceTime(raceElapsedMs)}</div>
+        </div>
+
+        <div className="flex flex-col items-center justify-center absolute left-1/2 -translate-x-1/2">
+          <div className="text-white font-bold text-sm tracking-wider uppercase whitespace-nowrap overflow-hidden text-ellipsis max-w-[120px] sm:max-w-[200px]">{athleteName || "ATHLETE"}</div>
+          <div className="text-[#CCFF00] opacity-80 text-xs font-mono mt-0.5">#{athleteBib || "---"}</div>
+        </div>
+
+        <div className="text-right z-10">
+          <div className="text-xs text-gray-500 uppercase tracking-widest font-bold mb-1">PROGRESS</div>
+          <div className="text-xl font-mono text-white font-medium">{completedCount}/12</div>
+        </div>
+      </div>
+
+      {/* Main Timer Display */}
+      <div className="flex-1 flex flex-col items-center justify-center p-6 bg-black relative">
+        <div className="text-center w-full max-w-md">
+          {activeTarget === null && !allComplete ? (
+            <div className="flex flex-col items-center justify-center text-gray-600 gap-4">
+              <Flag className="w-16 h-16 opacity-50" />
+              <div className="text-lg">{completedCount === 0 ? "Ready to dominate?" : "Select activity below"}</div>
+            </div>
+          ) : allComplete ? (
+            <div className="flex flex-col items-center justify-center text-[#CCFF00] gap-4 w-full px-4 mt-8">
+              <Trophy className="w-20 h-20 drop-shadow-[0_0_15px_rgba(204,255,0,0.5)]" />
+              <div className="text-3xl font-bold tracking-tighter text-white">OFFICIAL RESULT</div>
+
+              <div className="bg-[#111] border border-[#333] rounded-[24px] w-full p-6 mt-4 text-left">
+                <div className="text-gray-500 text-xs font-bold tracking-widest mb-1">ATHLETE</div>
+                <div className="text-white text-2xl font-bold mb-6">{athleteName || "Unknown"} <span className="text-gray-500">#{athleteBib || "---"}</span></div>
+
+                <div className="text-gray-500 text-xs font-bold tracking-widest mb-1">TOTAL RACE TIME</div>
+                <div className="text-[#CCFF00] text-5xl font-mono mb-6">{formatRaceTime(raceElapsedMs)}</div>
+
+                <div className="text-gray-500 text-xs font-bold tracking-widest mb-1">SYNC STATUS</div>
+                <div className="text-white text-base flex items-center gap-2">
+                  <Check className="w-5 h-5 text-green-500" /> Saved Locally
+                </div>
+              </div>
+            </div>
+          ) : (
+            <>
+              <div className="text-[#CCFF00] text-sm uppercase tracking-[0.2em] font-bold mb-4 ml-1">
+                {activeTarget?.kind === "activity"
+                  ? (() => {
+                    const a = activities.find(act => act.id === activeTarget.id);
+                    if (!a) return "";
+                    return a.name === "Run" ? `Run ${Math.ceil(a.id / 2)}` : a.name;
+                  })()
+                  : "Transition"}
+              </div>
               <div
-                className="h-full bg-primary-foreground/80 rounded-full transition-all duration-500 ease-out"
-                style={{ width: `${(completedCount / 12) * 100}%` }}
-              />
-            </div>
-            <span className="text-sm font-medium tabular-nums" data-testid="text-progress">
-              {completedCount}/12
-            </span>
-          </div>
+                className={`text-7xl sm:text-[8rem] font-mono tracking-tighter transition-opacity duration-200 tabular-nums ${isRunning ? "text-white drop-shadow-[0_0_10px_rgba(255,255,255,0.2)]" : "text-gray-500"
+                  }`}
+                style={{ fontVariantNumeric: "tabular-nums" }}
+              >
+                {formatTime(timerMs)}
+              </div>
+            </>
+          )}
         </div>
       </div>
-      <div className="max-w-2xl mx-auto px-4 py-5 space-y-4">
-        <div className="flex items-end gap-3">
-          <div className="flex-1 space-y-1.5">
-            <Label htmlFor="athlete-name" className="text-sm font-medium text-muted-foreground">
-              Athlete Name
-            </Label>
-            <Input
-              id="athlete-name"
-              data-testid="input-athlete-name"
-              value={athleteName}
-              onChange={(e) => setAthleteName(e.target.value)}
-              placeholder="Enter athlete name..."
-              className="text-base"
-            />
-          </div>
-          <Button variant="secondary" size="default" data-testid="button-reset-race" onClick={() => setResetDialogOpen(true)}>
-            <RotateCcw className="mr-2 h-4 w-4" />
-            Reset
-          </Button>
-        </div>
 
-        {allComplete && (
-          <Card className="border-chart-2/30 bg-chart-2/5 p-5">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="flex items-center justify-center w-10 h-10 rounded-full bg-chart-2/15">
-                <Trophy className="h-5 w-5 text-chart-2" />
-              </div>
-              <div>
-                <h2 className="text-lg font-bold" data-testid="text-race-complete">Race Complete!</h2>
-                <p className="text-sm text-muted-foreground">
-                  {athleteName ? athleteName : "Athlete"} finished all 12 activities
-                </p>
-              </div>
-            </div>
+      {/* The Bottom Half Action Zone */}
+      {!allComplete && (
+        <div className="h-[45vh] w-full shrink-0 relative bg-[#0a0a0a] rounded-t-[40px] px-6 pt-6 pb-12 flex flex-col border-t border-[#1a1a1a]">
+          {activeTarget === null ? (
+            completedCount === 0 ? (
+              <button
+                onClick={(e) => {
+                  if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
+                  selectActivity(1);
+                }}
+                className="w-full h-full bg-[#CCFF00] rounded-[32px] text-black text-4xl sm:text-5xl font-extrabold tracking-tighter active:scale-[0.96] active:bg-[#aacc00] transition-transform duration-100 flex items-center justify-center flex-col shadow-[0_0_50px_rgba(204,255,0,0.15)]"
+              >
+                START RACE
+                <span className="text-black/50 text-xs sm:text-base font-bold tracking-widest mt-2">TAP TO BEGIN RUN 1</span>
+              </button>
+            ) : (
+              <div className="flex-1 overflow-y-auto space-y-3 pb-8" style={{ scrollbarWidth: "none" }}>
+                {activities.map(act => {
+                  const isCompleted = act.status === "completed";
+                  const rox = roxTimes.find(r => r.afterActivityId === act.id);
+                  const isRoxCompleted = rox?.status === "completed";
+                  if (isCompleted && rox && isRoxCompleted) return null;
 
-            <div className="grid grid-cols-3 gap-3 mb-4">
-              <div className="rounded-md bg-background p-3 text-center">
-                <div className="text-xl font-mono font-bold tabular-nums" data-testid="text-total-race-time">
-                  {formatRaceTime(raceElapsedMs)}
-                </div>
-                <div className="text-xs text-muted-foreground mt-1">Total Race</div>
-              </div>
-              <div className="rounded-md bg-background p-3 text-center">
-                <div className="text-xl font-mono font-bold tabular-nums" data-testid="text-total-activity-time">
-                  {formatRaceTime(totalActivityMs)}
-                </div>
-                <div className="text-xs text-muted-foreground mt-1">Activity</div>
-              </div>
-              <div className="rounded-md bg-background p-3 text-center">
-                <div className="text-xl font-mono font-bold tabular-nums text-chart-4" data-testid="text-total-rox-time">
-                  {formatRaceTime(totalRoxMs)}
-                </div>
-                <div className="text-xs text-muted-foreground mt-1">Rox Time</div>
-              </div>
-            </div>
-
-            <div className="space-y-1">
-              {activities.map((a) => {
-                const rox = roxTimes.find((r) => r.afterActivityId === a.id);
-                return (
-                  <div key={a.id}>
-                    <div
-                      className="flex items-center justify-between text-sm px-2 py-1.5 rounded-md bg-background"
-                      data-testid={`text-result-${a.id}`}
-                    >
-                      <div className="flex items-center gap-2">
-                        <span className="text-muted-foreground w-5 text-right tabular-nums">{a.id}.</span>
-                        <span className="font-medium">{a.name}</span>
-                        <span className="text-muted-foreground text-xs">({a.value})</span>
-                      </div>
-                      <span className="font-mono tabular-nums font-medium">{formatTime(a.elapsedMs)}</span>
-                    </div>
-                    {rox && rox.status === "completed" && (
-                      <div
-                        className="flex items-center justify-between text-xs px-2 py-1 ml-7 text-chart-4"
-                        data-testid={`text-result-rox-${a.id}`}
-                      >
-                        <div className="flex items-center gap-1.5">
-                          <ArrowDownUp className="h-3 w-3" />
-                          <span>Rox Time</span>
-                        </div>
-                        <span className="font-mono tabular-nums">{formatTime(rox.elapsedMs)}</span>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </Card>
-        )}
-
-        <div className="space-y-2">
-          {activities.map((activity) => {
-            const isActive = isActivityActive(activity.id);
-            const isCompleted = activity.status === "completed";
-            const isPending = activity.status === "pending" && !isActive;
-
-            const rox = roxTimes.find((r) => r.afterActivityId === activity.id);
-            const roxIsActive = rox ? isRoxActive(activity.id) : false;
-            const roxIsCompleted = rox?.status === "completed";
-            const roxIsPending = rox ? rox.status === "pending" && !roxIsActive : false;
-
-            return (
-              <div key={activity.id}>
-                <div
-                  ref={isActive ? activeCardRef : undefined}
-                  data-testid={`card-activity-${activity.id}`}
-                >
-                  <Card
-                    className={`transition-all duration-300 ${
-                      isActive
-                        ? "border-primary/50 ring-2 ring-primary/20"
-                        : isCompleted
-                          ? "border-chart-2/20"
-                          : "border-border"
-                    }`}
-                  >
-                    <div className="p-4">
-                      <div className="flex items-center gap-3">
+                  return (
+                    <div key={act.id}>
+                      {!isCompleted && (
                         <div
-                          className={`flex items-center justify-center w-9 h-9 rounded-full text-sm font-bold shrink-0 transition-colors ${
-                            isActive
-                              ? "bg-primary text-primary-foreground"
-                              : isCompleted
-                                ? "bg-chart-2/15 text-chart-2"
-                                : "bg-muted text-muted-foreground"
-                          }`}
-                          data-testid={`badge-number-${activity.id}`}
+                          onClick={() => selectActivity(act.id)}
+                          className="w-full bg-[#111] border border-[#222] rounded-2xl p-4 flex items-center justify-between active:scale-[0.98] transition-all cursor-pointer"
                         >
-                          {isCompleted ? <Check className="h-4 w-4" /> : activity.id}
-                        </div>
-
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="font-semibold text-base truncate" data-testid={`text-activity-name-${activity.id}`}>
-                              {activity.name}
-                            </span>
-                            <Badge variant={activity.type === "run" ? "secondary" : "default"} className="text-xs">
-                              {activity.type === "run" ? (
-                                <PersonStanding className="h-3 w-3 mr-1" />
-                              ) : (
-                                <Dumbbell className="h-3 w-3 mr-1" />
-                              )}
-                              {activity.type === "run" ? "Run" : "Exercise"}
-                            </Badge>
+                          <div>
+                            <div className="text-white font-bold text-xl">{act.id}. {act.name === "Run" ? `Run ${Math.ceil(act.id / 2)}` : act.name}</div>
+                            <div className="text-gray-500 text-sm">{act.value}</div>
                           </div>
-                          <p className="text-sm text-muted-foreground mt-0.5">
-                            {activity.metric}: {activity.value}
-                          </p>
+                          <Play className="text-[#CCFF00] w-8 h-8 opacity-50" />
                         </div>
-
-                        <div className="flex items-center gap-1 shrink-0">
-                          {isCompleted && (
-                            <span className="font-mono text-sm font-semibold text-chart-2 tabular-nums mr-1" data-testid={`text-time-${activity.id}`}>
-                              {formatTime(activity.elapsedMs)}
-                            </span>
-                          )}
-
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            aria-label={`Edit ${activity.name}`}
-                            data-testid={`button-edit-${activity.id}`}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              openEditDialog(activity.id);
-                            }}
-                          >
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-
-                          {isPending && (
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              aria-label={`Select ${activity.name}`}
-                              data-testid={`button-select-${activity.id}`}
-                              onClick={() => selectActivity(activity.id)}
-                            >
-                              <ChevronRight className="h-4 w-4" />
-                            </Button>
-                          )}
-
-                          {isCompleted && (
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              aria-label={`Redo ${activity.name}`}
-                              data-testid={`button-redo-${activity.id}`}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                redoActivity(activity.id);
-                              }}
-                            >
-                              <RotateCcw className="h-3.5 w-3.5" />
-                            </Button>
-                          )}
+                      )}
+                      {isCompleted && rox && !isRoxCompleted && (
+                        <div
+                          onClick={() => selectRox(act.id)}
+                          className="w-full bg-[#111] border border-[#CCFF00]/30 rounded-2xl p-4 flex items-center justify-between active:scale-[0.98] transition-all cursor-pointer mt-3"
+                        >
+                          <div>
+                            <div className="text-[#CCFF00] font-bold text-xl">Rox Time</div>
+                            <div className="text-gray-500 text-sm">To next station</div>
+                          </div>
+                          <Play className="text-[#CCFF00] w-8 h-8 opacity-50" />
                         </div>
-                      </div>
-
-                      {isActive && renderTimerControls("activity")}
+                      )}
                     </div>
-                  </Card>
-                </div>
-
-                {rox && (
-                  <div
-                    ref={roxIsActive ? activeCardRef : undefined}
-                    className="my-1"
-                    data-testid={`card-rox-${activity.id}`}
-                  >
-                    <div
-                      className={`rounded-md border transition-all duration-300 ${
-                        roxIsActive
-                          ? "border-chart-4/50 ring-2 ring-chart-4/20 bg-chart-4/5"
-                          : roxIsCompleted
-                            ? "border-chart-4/15 bg-chart-4/5"
-                            : "border-dashed border-border/60"
-                      }`}
-                    >
-                      <div className={`px-4 ${roxIsActive ? "py-4" : "py-2.5"}`}>
-                        <div className="flex items-center gap-3">
-                          <div
-                            className={`flex items-center justify-center w-7 h-7 rounded-full shrink-0 ${
-                              roxIsActive
-                                ? "bg-chart-4 text-background"
-                                : roxIsCompleted
-                                  ? "bg-chart-4/15 text-chart-4"
-                                  : "bg-muted/50 text-muted-foreground"
-                            }`}
-                          >
-                            {roxIsCompleted ? <Check className="h-3 w-3" /> : <ArrowDownUp className="h-3 w-3" />}
-                          </div>
-
-                          <div className="flex-1 min-w-0">
-                            <span className={`text-sm font-medium ${roxIsCompleted || roxIsActive ? "text-chart-4" : "text-muted-foreground"}`}>
-                              Rox Time
-                            </span>
-                            <span className="text-xs text-muted-foreground ml-2">
-                              Transition {activity.id} → {activity.id + 1}
-                            </span>
-                          </div>
-
-                          <div className="flex items-center gap-1 shrink-0">
-                            {roxIsCompleted && (
-                              <span className="font-mono text-sm font-semibold text-chart-4 tabular-nums mr-1" data-testid={`text-rox-time-${activity.id}`}>
-                                {formatTime(rox.elapsedMs)}
-                              </span>
-                            )}
-
-                            {roxIsPending && (
-                              <Button
-                                size="icon"
-                                variant="ghost"
-                                aria-label={`Start Rox transition ${activity.id} to ${activity.id + 1}`}
-                                data-testid={`button-select-rox-${activity.id}`}
-                                onClick={() => selectRox(activity.id)}
-                              >
-                                <ChevronRight className="h-4 w-4" />
-                              </Button>
-                            )}
-
-                            {roxIsCompleted && (
-                              <Button
-                                size="icon"
-                                variant="ghost"
-                                aria-label={`Redo Rox transition ${activity.id} to ${activity.id + 1}`}
-                                data-testid={`button-redo-rox-${activity.id}`}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  redoRox(activity.id);
-                                }}
-                              >
-                                <RotateCcw className="h-3.5 w-3.5" />
-                              </Button>
-                            )}
-                          </div>
-                        </div>
-
-                        {roxIsActive && renderTimerControls("rox")}
-                      </div>
-                    </div>
-                  </div>
-                )}
+                  )
+                })}
+                <div className="h-10"></div>
               </div>
-            );
-          })}
+            )
+          ) : (
+            <div className="flex gap-2 w-full h-full">
+              {/* 5-Second Ghost State Reset Button mapped to a swipe visually but click mechanically for now */}
+              <button
+                onClick={(e) => {
+                  if (navigator.vibrate) navigator.vibrate([20]);
+                  resetCurrentTimer();
+                  if (activeTarget.kind === "activity") {
+                    redoActivity(activeTarget.id);
+                  } else {
+                    redoRox(activeTarget.afterActivityId);
+                  }
+                }}
+                className="w-20 shrink-0 h-full bg-[#111] rounded-[32px] text-gray-500 flex items-center justify-center flex-col active:bg-[#222]"
+              >
+                <RotateCcw className="w-8 h-8 mb-2" />
+                <span className="text-[10px] font-bold tracking-widest">UNDO</span>
+              </button>
+
+              <button
+                onClick={(e) => {
+                  if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
+                  if (isRunning) {
+                    handleComplete && handleComplete();
+                  } else {
+                    beginTimer(timerMs);
+                  }
+                }}
+                className="flex-1 h-full bg-[#CCFF00] rounded-[32px] text-black text-4xl sm:text-5xl font-extrabold tracking-tighter active:scale-[0.96] active:bg-[#aacc00] transition-transform duration-100 flex items-center justify-center flex-col shadow-[0_0_50px_rgba(204,255,0,0.15)]"
+              >
+                {isRunning ? (activeTarget?.kind === "activity" && activeTarget.id === 12 ? "FINISH RACE" : "DONE") : "START"}
+                <span className="text-black/50 text-xs sm:text-base font-bold tracking-widest mt-2">{activeTarget?.kind === "activity" && activeTarget.id === 12 ? "FINAL STATION" : "TAP ANYWHERE"}</span>
+              </button>
+            </div>
+          )}
         </div>
-
-        {!allComplete && activeTarget === null && (
-          <div className="text-center py-8">
-            <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-muted mb-3">
-              <Flag className="h-6 w-6 text-muted-foreground" />
-            </div>
-            <p className="text-muted-foreground" data-testid="text-get-started">
-              Select an activity to start timing
-            </p>
-          </div>
-        )}
-
-        <div className="h-8" />
-      </div>
-      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Edit Activity</DialogTitle>
-            <DialogDescription>Customize this activity's details.</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-2">
-            <div className="space-y-2">
-              <Label htmlFor="edit-name">Activity Name</Label>
-              <Input
-                id="edit-name"
-                data-testid="input-edit-name"
-                value={editForm.name}
-                onChange={(e) => setEditForm((f) => ({ ...f, name: e.target.value }))}
-                placeholder="e.g. Sled Push"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Type</Label>
-              <Select value={editForm.type} onValueChange={(v) => setEditForm((f) => ({ ...f, type: v as ActivityType }))}>
-                <SelectTrigger data-testid="select-edit-type">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="run">Run</SelectItem>
-                  <SelectItem value="exercise">Exercise</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label>Measurement</Label>
-              <Select value={editForm.metric} onValueChange={(v) => setEditForm((f) => ({ ...f, metric: v }))}>
-                <SelectTrigger data-testid="select-edit-metric">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {METRIC_OPTIONS.map((m) => (
-                    <SelectItem key={m} value={m}>{m}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="edit-value">Value</Label>
-              <Input
-                id="edit-value"
-                data-testid="input-edit-value"
-                value={editForm.value}
-                onChange={(e) => setEditForm((f) => ({ ...f, value: e.target.value }))}
-                placeholder="e.g. 200m, 75 reps"
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="secondary" onClick={() => setEditDialogOpen(false)} data-testid="button-cancel-edit">
-              Cancel
-            </Button>
-            <Button onClick={saveEdit} data-testid="button-save-edit">
-              Save Changes
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-      <Dialog open={resetDialogOpen} onOpenChange={setResetDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Reset Race</DialogTitle>
-            <DialogDescription>
-              This will clear all recorded times and reset every activity. This action cannot be undone.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="secondary" onClick={() => setResetDialogOpen(false)} data-testid="button-cancel-reset">
-              Cancel
-            </Button>
-            <Button variant="destructive" onClick={resetRace} data-testid="button-confirm-reset">
-              Reset Everything
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      )}
     </div>
   );
 }
