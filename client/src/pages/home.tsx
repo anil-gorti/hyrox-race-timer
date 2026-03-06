@@ -482,23 +482,25 @@ export default function Home() {
 
   if (!isLanded) {
     return (
-      <div className="fixed inset-0 bg-black flex flex-col items-center justify-center font-sans overflow-hidden">
-        {/* Full Screen Exact Image (Bundled directly into Android APK) */}
-        <img
-          src={splashImg}
-          alt="HyFit Landing Splash"
-          className="absolute inset-0 w-full h-full object-cover"
-        />
+      <div className="fixed inset-0 bg-[#6b353a] flex flex-col items-center justify-between font-sans overflow-hidden">
+        {/* Uncropped Splash Image containing 'Powered by Wone' */}
+        <div className="flex-1 w-full flex items-center justify-center overflow-hidden pt-4">
+          <img
+            src={splashImg}
+            alt="HyFit Landing Splash"
+            className="w-full h-full object-contain"
+          />
+        </div>
 
-        {/* Gradient Overlay just for the bottom text visibility */}
-        <div className="absolute inset-x-0 bottom-0 h-48 bg-gradient-to-t from-black/80 to-transparent pointer-events-none z-0" />
-
-        <button
-          onClick={() => setIsLanded(true)}
-          className="absolute bottom-12 bg-[#CCFF00] text-black font-extrabold py-5 px-10 sm:px-16 rounded-[32px] tracking-tighter text-2xl active:scale-95 transition-all shadow-[0_0_40px_rgba(204,255,0,0.3)] z-10 w-[85%] max-w-sm"
-        >
-          Open Timing App
-        </button>
+        {/* Dedicated Button Dock below the image */}
+        <div className="w-full shrink-0 flex items-center justify-center py-6 px-4 bg-[#6b353a]">
+          <button
+            onClick={() => setIsLanded(true)}
+            className="bg-[#CCFF00] text-black font-extrabold py-5 px-10 w-full sm:max-w-sm rounded-[32px] tracking-tighter text-2xl active:scale-95 transition-all shadow-[0_0_20px_rgba(204,255,0,0.2)]"
+          >
+            Open Timing App
+          </button>
+        </div>
       </div>
     );
   }
