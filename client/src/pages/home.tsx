@@ -35,49 +35,14 @@ import {
   ArrowDownUp,
 } from "lucide-react";
 
-type ActivityType = "run" | "exercise";
-type ActivityStatus = "pending" | "active" | "completed";
-
-interface Activity {
-  id: number;
-  name: string;
-  type: ActivityType;
-  metric: string;
-  value: string;
-  elapsedMs: number;
-  status: ActivityStatus;
-}
-
-interface RoxTime {
-  afterActivityId: number;
-  elapsedMs: number;
-  status: ActivityStatus;
-}
-
-const DEFAULT_ACTIVITIES: Activity[] = [
-  { id: 1, name: "Run", type: "run", metric: "Distance", value: "200m", elapsedMs: 0, status: "pending" },
-  { id: 2, name: "SkiErg", type: "exercise", metric: "Distance", value: "1000m", elapsedMs: 0, status: "pending" },
-  { id: 3, name: "Run", type: "run", metric: "Distance", value: "200m", elapsedMs: 0, status: "pending" },
-  { id: 4, name: "Burpee Broad Jumps", type: "exercise", metric: "Distance", value: "80m", elapsedMs: 0, status: "pending" },
-  { id: 5, name: "Run", type: "run", metric: "Distance", value: "200m", elapsedMs: 0, status: "pending" },
-  { id: 6, name: "Rowing", type: "exercise", metric: "Distance", value: "1000m", elapsedMs: 0, status: "pending" },
-  { id: 7, name: "Run", type: "run", metric: "Distance", value: "200m", elapsedMs: 0, status: "pending" },
-  { id: 8, name: "Farmers Carry", type: "exercise", metric: "Distance", value: "200m", elapsedMs: 0, status: "pending" },
-  { id: 9, name: "Run", type: "run", metric: "Distance", value: "200m", elapsedMs: 0, status: "pending" },
-  { id: 10, name: "Sandbag Lunges", type: "exercise", metric: "Distance", value: "100m", elapsedMs: 0, status: "pending" },
-  { id: 11, name: "Run", type: "run", metric: "Distance", value: "200m", elapsedMs: 0, status: "pending" },
-  { id: 12, name: "Wall Balls", type: "exercise", metric: "Reps", value: "75", elapsedMs: 0, status: "pending" },
-];
-
-function buildDefaultRoxTimes(): RoxTime[] {
-  return Array.from({ length: 11 }, (_, i) => ({
-    afterActivityId: i + 1,
-    elapsedMs: 0,
-    status: "pending" as ActivityStatus,
-  }));
-}
+import {
+  Activity, ActivityType, ActivityStatus, RoxTime,
+  getStoredActivities, buildDefaultRoxTimes
+} from "@/lib/events";
 
 const METRIC_OPTIONS = ["Distance", "Reps", "Time", "Weight", "Calories"];
+
+
 
 function formatTime(ms: number): string {
   const totalSeconds = Math.floor(ms / 1000);
@@ -106,8 +71,12 @@ export default function Home() {
   const [athleteBib, setAthleteBib] = useState("");
   const [isLanded, setIsLanded] = useState(false);
   const [isRegistered, setIsRegistered] = useState(false);
-  const [activities, setActivities] = useState<Activity[]>(DEFAULT_ACTIVITIES);
-  const [roxTimes, setRoxTimes] = useState<RoxTime[]>(buildDefaultRoxTimes);
+  const [activities, setActivities] = useState<Activity[]>(getStoredActivities());
+  const [roxTimes, setRoxTimes] = useState<RoxTime[]>([]);
+
+  useEffect(() => {
+    setRoxTimes(buildDefaultRoxTimes(activities.length));
+  }, [activities.length]);
   const [hasSynced, setHasSynced] = useState(false);
 
   const [activeTarget, setActiveTarget] = useState<TimerTarget>(null);
@@ -149,7 +118,7 @@ export default function Home() {
   const completedCount = activities.filter((a) => a.status === "completed").length;
   const totalActivityMs = activities.reduce((sum, a) => sum + a.elapsedMs, 0);
   const totalRoxMs = roxTimes.reduce((sum, r) => sum + r.elapsedMs, 0);
-  const allComplete = completedCount === 12;
+  const allComplete = activities.length > 0 && completedCount === activities.length;
 
   useEffect(() => {
     if (allComplete && !hasSynced) {
@@ -451,8 +420,8 @@ export default function Home() {
     if (raceIntervalRef.current) clearInterval(raceIntervalRef.current);
     intervalRef.current = null;
     raceIntervalRef.current = null;
-    setActivities(DEFAULT_ACTIVITIES.map((a) => ({ ...a })));
-    setRoxTimes(buildDefaultRoxTimes());
+    setActivities(getStoredActivities().map((a) => ({ ...a, elapsedMs: 0, status: "pending" })));
+    setRoxTimes(buildDefaultRoxTimes(activities.length));
     setActiveTarget(null);
     setIsRunning(false);
     setTimerMs(0);
@@ -550,13 +519,15 @@ export default function Home() {
         </div>
 
         <div className="flex flex-col items-center justify-center absolute left-1/2 -translate-x-1/2">
-          <div className="text-white font-bold text-lg sm:text-xl tracking-widest uppercase whitespace-nowrap overflow-hidden text-ellipsis max-w-[150px] sm:max-w-[250px]">{athleteName || "ATHLETE"}</div>
+          <button
+            onClick={() => { if (confirm("Are you sure you want to go to Admin panel?")) window.location.href = "/admin" }}
+            className="text-white font-bold text-lg sm:text-xl tracking-widest uppercase whitespace-nowrap overflow-hidden text-ellipsis max-w-[150px] sm:max-w-[250px]">{athleteName || "ATHLETE"}</button>
           <div className="text-[#CCFF00] opacity-80 text-sm font-mono mt-0.5">#{athleteBib || "---"}</div>
         </div>
 
-        <div className="text-right z-10">
+        <div className="text-right z-10 w-24">
           <div className="text-xs text-gray-500 uppercase tracking-widest font-bold mb-1">PROGRESS</div>
-          <div className="text-xl font-mono text-white font-medium">{completedCount}/12</div>
+          <div className="text-xl font-mono text-white font-medium">{completedCount}/{activities.length}</div>
         </div>
       </div>
 
