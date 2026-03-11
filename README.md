@@ -1,6 +1,6 @@
-# Hyrox Race Timer
+# Hyfit Games 2.1 Timer
 
-A volunteer timekeeper app for Hyrox race events. Allows timing individual athletes through 12 alternating activities (6 runs + 6 functional exercises), including Rox Time (transition time) between activities.
+A volunteer timekeeper app for Hyfit Games 2.1 style race events. Allows timing individual athletes through 12 alternating activities (6 runs + 6 functional exercises), including Rox Time (transition time) between activities.
 
 ## Features
 

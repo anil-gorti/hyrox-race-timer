@@ -39,6 +39,8 @@ import {
   Activity, ActivityType, ActivityStatus, RoxTime,
   getStoredActivities, buildDefaultRoxTimes
 } from "@/lib/events";
+import { isAdmin, setAdminWithPin } from "@/lib/role";
+import { WoneMark } from "@/components/WoneMark";
 
 const METRIC_OPTIONS = ["Distance", "Reps", "Time", "Weight", "Calories"];
 
@@ -63,6 +65,13 @@ function formatRaceTime(ms: number): string {
   return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 }
 
+function formatSplitTime(ms: number): string {
+  const totalSeconds = Math.floor(ms / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+}
+
 type TimerTarget = { kind: "activity"; id: number } | { kind: "rox"; afterActivityId: number } | null;
 
 export default function Home() {
@@ -71,6 +80,9 @@ export default function Home() {
   const [athleteBib, setAthleteBib] = useState("");
   const [isLanded, setIsLanded] = useState(false);
   const [isRegistered, setIsRegistered] = useState(false);
+  const [athleteSearch, setAthleteSearch] = useState("");
+  const [athleteSearchResults, setAthleteSearchResults] = useState<Array<{ id: string; bib: string; name: string; phone: string | null }>>([]);
+  const [athleteSearching, setAthleteSearching] = useState(false);
   const [activities, setActivities] = useState<Activity[]>(getStoredActivities());
   const [roxTimes, setRoxTimes] = useState<RoxTime[]>([]);
 
@@ -88,6 +100,11 @@ export default function Home() {
   const [editId, setEditId] = useState<number | null>(null);
 
   const [resetDialogOpen, setResetDialogOpen] = useState(false);
+  const [adminPinDialogOpen, setAdminPinDialogOpen] = useState(false);
+  const [adminPin, setAdminPin] = useState("");
+  const [lastCompletedActivityId, setLastCompletedActivityId] = useState<number | null>(null);
+  const [lastCompletedKind, setLastCompletedKind] = useState<"activity" | "rox" | null>(null);
+  const [lastCompletedRef, setLastCompletedRef] = useState<number | null>(null);
 
   const [raceElapsedMs, setRaceElapsedMs] = useState(0);
   const [isRaceRunning, setIsRaceRunning] = useState(false);
@@ -119,6 +136,7 @@ export default function Home() {
   const totalActivityMs = activities.reduce((sum, a) => sum + a.elapsedMs, 0);
   const totalRoxMs = roxTimes.reduce((sum, r) => sum + r.elapsedMs, 0);
   const allComplete = activities.length > 0 && completedCount === activities.length;
+  const activeActivity = activeTarget?.kind === "activity" ? activities.find((a) => a.id === activeTarget.id) : null;
 
   useEffect(() => {
     if (allComplete && !hasSynced) {
@@ -126,7 +144,8 @@ export default function Home() {
         id: a.id,
         name: a.name,
         timeMs: a.elapsedMs,
-        roxMs: roxTimes.find(r => r.afterActivityId === a.id)?.elapsedMs || 0
+        roxMs: roxTimes.find(r => r.afterActivityId === a.id)?.elapsedMs || 0,
+        count: a.hasCounter ? (a.counter || 0) : undefined
       }));
 
       supabase.from('race_results').insert([
@@ -227,6 +246,7 @@ export default function Home() {
     (id: number) => {
       if (activeTarget?.kind === "activity" && activeTarget.id === id) return;
       saveCurrentTimerValue();
+      setLastCompletedActivityId(null);
 
       const activity = activities.find((a) => a.id === id);
       if (activity) {
@@ -248,6 +268,7 @@ export default function Home() {
     (afterActivityId: number) => {
       if (activeTarget?.kind === "rox" && activeTarget.afterActivityId === afterActivityId) return;
       saveCurrentTimerValue();
+      setLastCompletedActivityId(null);
 
       const rox = roxTimes.find((r) => r.afterActivityId === afterActivityId);
       if (rox) {
@@ -280,8 +301,12 @@ export default function Home() {
     setActivities((prev) =>
       prev.map((a) => (a.id === activityId ? { ...a, elapsedMs: finalTime, status: "completed" as ActivityStatus } : a))
     );
+    setLastCompletedActivityId(activityId);
+    setLastCompletedKind("activity");
+    setLastCompletedRef(activityId);
 
-    if (activityId < 12) {
+    const lastActivityId = activities.length > 0 ? Math.max(...activities.map((a) => a.id)) : 0;
+    if (activityId < lastActivityId) {
       const rox = roxTimes.find((r) => r.afterActivityId === activityId);
       if (rox && rox.status !== "completed") {
         setActiveTarget({ kind: "rox", afterActivityId: activityId });
@@ -327,7 +352,10 @@ export default function Home() {
     setRoxTimes((prev) =>
       prev.map((r) => (r.afterActivityId === afterId ? { ...r, elapsedMs: finalTime, status: "completed" as ActivityStatus } : r))
     );
+    setLastCompletedKind("rox");
+    setLastCompletedRef(afterId);
 
+    setLastCompletedActivityId(null);
     const nextActivityId = afterId + 1;
     const nextActivity = activities.find((a) => a.id === nextActivityId);
     if (nextActivity && nextActivity.status !== "completed") {
@@ -392,6 +420,41 @@ export default function Home() {
     [activeTarget]
   );
 
+  const goBackOneStep = useCallback(() => {
+    if (lastCompletedKind === null || lastCompletedRef === null) return;
+    if (isRunning) {
+      accumulatedRef.current += Date.now() - startTimeRef.current;
+      clearActivityInterval();
+      setIsRunning(false);
+    }
+    if (lastCompletedKind === "activity") {
+      redoActivity(lastCompletedRef);
+      setActiveTarget({ kind: "activity", id: lastCompletedRef });
+      setActivities((prev) =>
+        prev.map((a) =>
+          a.id === lastCompletedRef ? { ...a, status: "active" as ActivityStatus } : a.status === "active" ? { ...a, status: "pending" as ActivityStatus } : a
+        )
+      );
+      setRoxTimes((prev) => prev.map((r) => (r.status === "active" ? { ...r, status: "pending" as ActivityStatus } : r)));
+      setLastCompletedActivityId(null);
+    } else {
+      redoRox(lastCompletedRef);
+      setActiveTarget({ kind: "rox", afterActivityId: lastCompletedRef });
+      setActivities((prev) => prev.map((a) => (a.status === "active" ? { ...a, status: "pending" as ActivityStatus } : a)));
+      setRoxTimes((prev) =>
+        prev.map((r) =>
+          r.afterActivityId === lastCompletedRef ? { ...r, status: "active" as ActivityStatus } : r.status === "active" ? { ...r, status: "pending" as ActivityStatus } : r
+        )
+      );
+      setLastCompletedActivityId(lastCompletedRef);
+    }
+    setLastCompletedKind(null);
+    setLastCompletedRef(null);
+    accumulatedRef.current = 0;
+    setTimerMs(0);
+    beginTimer(0);
+  }, [lastCompletedKind, lastCompletedRef, isRunning, redoActivity, redoRox, activities, clearActivityInterval, beginTimer]);
+
   const openEditDialog = useCallback(
     (id: number) => {
       const activity = activities.find((a) => a.id === id);
@@ -420,11 +483,14 @@ export default function Home() {
     if (raceIntervalRef.current) clearInterval(raceIntervalRef.current);
     intervalRef.current = null;
     raceIntervalRef.current = null;
-    setActivities(getStoredActivities().map((a) => ({ ...a, elapsedMs: 0, status: "pending" })));
+    setActivities(getStoredActivities().map((a) => ({ ...a, elapsedMs: 0, counter: 0, status: "pending" })));
     setRoxTimes(buildDefaultRoxTimes(activities.length));
     setActiveTarget(null);
     setIsRunning(false);
     setTimerMs(0);
+    setLastCompletedActivityId(null);
+    setLastCompletedKind(null);
+    setLastCompletedRef(null);
     accumulatedRef.current = 0;
     setRaceElapsedMs(0);
     setIsRaceRunning(false);
@@ -432,26 +498,64 @@ export default function Home() {
     setResetDialogOpen(false);
   }, []);
 
+  const bumpActiveCounter = useCallback(
+    (delta: number) => {
+      if (activeTarget?.kind !== "activity") return;
+      setActivities((prev) =>
+        prev.map((a) => {
+          if (a.id !== activeTarget.id) return a;
+          if (!a.hasCounter) return a;
+          const next = Math.max(0, (a.counter || 0) + delta);
+          return { ...a, counter: next };
+        })
+      );
+    },
+    [activeTarget]
+  );
+
   const handleComplete = activeTarget?.kind === "activity" ? completeActivity : activeTarget?.kind === "rox" ? completeRox : undefined;
 
-  const checkBib = async (bib: string) => {
-    if (!bib) return;
+  const lookupAthlete = async (query: string) => {
+    const q = query.trim();
+    if (q.length < 2) {
+      setAthleteSearchResults([]);
+      return;
+    }
+    setAthleteSearching(true);
     try {
-      const { data, error } = await supabase.from('athletes').select('*').eq('bib', bib).limit(1).single();
-      if (data && !error) {
-        setAthleteName(data.name);
-        if (data.phone) setAthletePhone(data.phone);
+      const { data, error } = await supabase
+        .from("athletes")
+        .select("id, bib, name, phone")
+        .or(`name.ilike.%${q}%,phone.ilike.%${q}%`)
+        .limit(20);
+      if (!error && data) {
+        setAthleteSearchResults(data as Array<{ id: string; bib: string; name: string; phone: string | null }>);
       } else {
-        console.log("No exact match found in Supabase.");
+        setAthleteSearchResults([]);
       }
     } catch (e) {
       console.error(e);
+      setAthleteSearchResults([]);
+    } finally {
+      setAthleteSearching(false);
     }
+  };
+
+  const selectAthlete = (athlete: { bib: string; name: string; phone: string | null }) => {
+    setAthleteBib(athlete.bib);
+    setAthleteName(athlete.name);
+    setAthletePhone(athlete.phone || "");
+    setAthleteSearchResults([]);
+    setAthleteSearch("");
+    setIsRegistered(true);
   };
 
   if (!isLanded) {
     return (
       <div className="fixed inset-0 bg-[#6b353a] flex flex-col items-center justify-between font-sans overflow-hidden">
+        <div className="absolute top-4 left-4 z-20">
+          <WoneMark />
+        </div>
         {/* Uncropped Splash Image containing 'Powered by Wone' */}
         <div className="flex-1 w-full flex items-center justify-center overflow-hidden pt-4">
           <img
@@ -465,7 +569,7 @@ export default function Home() {
         <div className="w-full shrink-0 flex items-center justify-center py-6 px-4 bg-[#6b353a]">
           <button
             onClick={() => setIsLanded(true)}
-            className="bg-[#CCFF00] text-black font-extrabold py-5 px-10 w-full sm:max-w-sm rounded-[32px] tracking-tighter text-2xl active:scale-95 transition-all shadow-[0_0_20px_rgba(204,255,0,0.2)]"
+            className="bg-[#CCFF00] text-black font-bold py-4 px-8 w-full sm:max-w-sm rounded-2xl text-lg tracking-tight active:scale-[0.98] transition-all shadow-[0_0_20px_rgba(204,255,0,0.2)]"
           >
             Open Timing App
           </button>
@@ -476,32 +580,71 @@ export default function Home() {
 
   if (!isRegistered) {
     return (
-      <div className="fixed inset-0 bg-black text-white overflow-hidden flex flex-col font-sans px-6 pt-12 pb-6">
-        <div className="flex-1">
-          <div className="text-[#CCFF00] font-bold tracking-widest text-sm mb-8">HYFIT GAMES</div>
-          <h1 className="text-4xl font-extrabold mb-8">Athlete<br />Check-in</h1>
+      <div className="fixed inset-0 bg-black text-white overflow-hidden flex flex-col font-sans px-6 pt-10 pb-6">
+        <div className="absolute top-4 left-4">
+          <WoneMark />
+        </div>
+        <div className="flex-1 min-h-0">
+          <p className="text-[#CCFF00] font-semibold tracking-wider text-xs uppercase mb-6">HYFIT GAMES</p>
+          <h1 className="text-2xl font-bold tracking-tight mb-1">Look up athlete</h1>
+          <p className="text-gray-500 text-sm mb-5">Search by name or phone number</p>
 
-          <div className="space-y-6">
+          <div className="space-y-3 mb-6">
+            <input
+              type="text"
+              value={athleteSearch}
+              onChange={(e) => {
+                setAthleteSearch(e.target.value);
+                lookupAthlete(e.target.value);
+              }}
+              onFocus={() => athleteSearch.length >= 2 && lookupAthlete(athleteSearch)}
+              className="w-full bg-[#111] border border-[#333] focus:border-[#CCFF00] outline-none py-3 px-4 text-base placeholder-gray-500 rounded-xl transition-colors"
+              placeholder="Name or phone number"
+              autoComplete="off"
+            />
+            {athleteSearching && <p className="text-gray-500 text-xs">Searching…</p>}
+            {!athleteSearching && athleteSearchResults.length > 0 && (
+              <div className="space-y-1 max-h-40 overflow-y-auto rounded-xl border border-[#333] bg-[#0a0a0a] p-2">
+                {athleteSearchResults.map((a) => (
+                  <button
+                    key={a.id}
+                    type="button"
+                    onClick={() => selectAthlete(a)}
+                    className="w-full text-left py-2.5 px-3 rounded-lg bg-[#111] hover:bg-[#1a1a1a] border border-transparent hover:border-[#333] transition-colors"
+                  >
+                    <div className="font-medium text-white text-sm">{a.name}</div>
+                    <div className="text-gray-500 text-xs">#{a.bib}{a.phone ? ` · ${a.phone}` : ""}</div>
+                  </button>
+                ))}
+              </div>
+            )}
+            {!athleteSearching && athleteSearch.trim().length >= 2 && athleteSearchResults.length === 0 && (
+              <p className="text-gray-500 text-xs">No athletes found. Enter details below.</p>
+            )}
+          </div>
+
+          <div className="border-t border-[#333] pt-5 space-y-3">
+            <p className="text-gray-500 text-xs font-semibold tracking-wider uppercase">Or enter manually</p>
             <div>
-              <label className="text-gray-500 text-sm font-bold tracking-widest block mb-2">BIB NUMBER</label>
-              <input type="text" value={athleteBib} onChange={e => { setAthleteBib(e.target.value); if (e.target.value.length >= 2) checkBib(e.target.value); }} className="w-full bg-[#111] border-b-2 border-[#333] focus:border-[#CCFF00] outline-none py-3 text-xl placeholder-gray-700 transition-colors" placeholder="e.g. 402" />
+              <label className="text-gray-500 text-[11px] font-medium tracking-wider uppercase block mb-1">Full name</label>
+              <input type="text" value={athleteName} onChange={(e) => setAthleteName(e.target.value)} className="w-full bg-[#111] border-b border-[#333] focus:border-[#CCFF00] outline-none py-2.5 text-base placeholder-gray-600 transition-colors rounded-none" placeholder="e.g. Hunter McIntyre" />
             </div>
             <div>
-              <label className="text-gray-500 text-sm font-bold tracking-widest block mb-2">FULL NAME</label>
-              <input type="text" value={athleteName} onChange={e => setAthleteName(e.target.value)} className="w-full bg-[#111] border-b-2 border-[#333] focus:border-[#CCFF00] outline-none py-3 text-xl placeholder-gray-700 transition-colors" placeholder="e.g. Hunter McIntyre" />
+              <label className="text-gray-500 text-[11px] font-medium tracking-wider uppercase block mb-1">Phone (optional)</label>
+              <input type="tel" value={athletePhone} onChange={(e) => setAthletePhone(e.target.value)} className="w-full bg-[#111] border-b border-[#333] focus:border-[#CCFF00] outline-none py-2.5 text-base placeholder-gray-600 transition-colors rounded-none" placeholder="e.g. +1 234 567 890" />
             </div>
             <div>
-              <label className="text-gray-500 text-sm font-bold tracking-widest block mb-2">PHONE NUMBER</label>
-              <input type="tel" value={athletePhone} onChange={e => setAthletePhone(e.target.value)} className="w-full bg-[#111] border-b-2 border-[#333] focus:border-[#CCFF00] outline-none py-3 text-xl placeholder-gray-700 transition-colors" placeholder="e.g. +1 234 567 890" />
+              <label className="text-gray-500 text-[11px] font-medium tracking-wider uppercase block mb-1">Bib (optional)</label>
+              <input type="text" value={athleteBib} onChange={(e) => setAthleteBib(e.target.value)} className="w-full bg-[#111] border-b border-[#333] focus:border-[#CCFF00] outline-none py-2.5 text-base placeholder-gray-600 transition-colors rounded-none" placeholder="e.g. 402" />
             </div>
           </div>
         </div>
         <button
           onClick={() => setIsRegistered(true)}
-          disabled={!athleteName || !athleteBib}
-          className="w-full bg-[#CCFF00] text-black font-extrabold py-5 rounded-[24px] tracking-tighter text-2xl active:bg-[#aacc00] disabled:opacity-50 disabled:bg-[#333] disabled:text-gray-500 transition-all font-sans"
+          disabled={!athleteName}
+          className="w-full bg-[#CCFF00] text-black font-bold py-4 rounded-2xl text-base tracking-tight active:scale-[0.98] disabled:opacity-50 disabled:bg-[#333] disabled:text-gray-500 transition-all mt-5"
         >
-          READY TO RACE
+          Ready to race
         </button>
       </div>
     );
@@ -510,56 +653,100 @@ export default function Home() {
   // The giant OLED mobile rendering layout
   return (
     <div className="fixed inset-0 bg-black text-white overflow-hidden flex flex-col font-sans select-none" style={{ WebkitTapHighlightColor: 'transparent' }}>
+      <div className="absolute top-3 left-4 z-30">
+        <WoneMark />
+      </div>
 
       {/* Top Status Bar */}
-      <div className="h-20 w-full flex items-center justify-between px-6 bg-black z-20 shrink-0 border-b border-[#1A1A1A]">
+      <div className="h-16 w-full flex items-center justify-between px-4 sm:px-6 bg-black z-20 shrink-0 border-b border-[#1A1A1A]">
         <div>
-          <div className="text-xs text-gray-500 uppercase tracking-widest font-bold mb-1">RACE TIME</div>
-          <div className="text-xl font-mono text-[#CCFF00] font-medium">{formatRaceTime(raceElapsedMs)}</div>
+          <div className="text-[11px] text-gray-500 uppercase tracking-wider font-medium mb-0.5">Race time</div>
+          <div className="text-base font-mono text-[#CCFF00] font-semibold tabular-nums">{formatRaceTime(raceElapsedMs)}</div>
         </div>
 
         <div className="flex flex-col items-center justify-center absolute left-1/2 -translate-x-1/2">
           <button
-            onClick={() => { if (confirm("Are you sure you want to go to Admin panel?")) window.location.href = "/admin" }}
-            className="text-white font-bold text-lg sm:text-xl tracking-widest uppercase whitespace-nowrap overflow-hidden text-ellipsis max-w-[150px] sm:max-w-[250px]">{athleteName || "ATHLETE"}</button>
-          <div className="text-[#CCFF00] opacity-80 text-sm font-mono mt-0.5">#{athleteBib || "---"}</div>
+            onClick={() => {
+              if (isAdmin()) {
+                window.location.href = "/admin";
+              } else {
+                setAdminPinDialogOpen(true);
+              }
+            }}
+            className="text-white font-semibold text-sm sm:text-base tracking-wide uppercase whitespace-nowrap overflow-hidden text-ellipsis max-w-[140px] sm:max-w-[220px]"
+          >
+            {athleteName || "Athlete"}
+          </button>
+          <div className="text-[#CCFF00]/90 text-xs font-mono mt-0.5 tabular-nums">#{athleteBib || "—"}</div>
         </div>
 
-        <div className="text-right z-10 w-24">
-          <div className="text-xs text-gray-500 uppercase tracking-widest font-bold mb-1">PROGRESS</div>
-          <div className="text-xl font-mono text-white font-medium">{completedCount}/{activities.length}</div>
+        <div className="text-right z-10 w-20">
+          <div className="text-[11px] text-gray-500 uppercase tracking-wider font-medium mb-0.5">Activities</div>
+          <div className="text-base font-mono text-white font-semibold tabular-nums">{completedCount}/{activities.length}</div>
         </div>
       </div>
 
       {/* Main Timer Display */}
-      <div className="flex-1 flex flex-col items-center justify-center p-6 bg-black relative">
+      <div className="flex-1 flex flex-col items-center justify-center px-4 py-5 bg-black relative min-h-0">
         <div className="text-center w-full max-w-md">
           {activeTarget === null && !allComplete ? (
-            <div className="flex flex-col items-center justify-center text-gray-600 gap-4">
-              <Flag className="w-16 h-16 opacity-50" />
-              <div className="text-lg">{completedCount === 0 ? "Ready to dominate?" : "Select activity below"}</div>
+            <div className="flex flex-col items-center justify-center text-gray-500 gap-3">
+              <Flag className="w-12 h-12 opacity-50" />
+              <p className="text-sm font-medium">{completedCount === 0 ? "Ready to start?" : "Select an activity below"}</p>
             </div>
           ) : allComplete ? (
-            <div className="flex flex-col items-center justify-center text-[#CCFF00] gap-4 w-full px-4 mt-8">
-              <Trophy className="w-20 h-20 drop-shadow-[0_0_15px_rgba(204,255,0,0.5)]" />
-              <div className="text-3xl font-bold tracking-tighter text-white">OFFICIAL RESULT</div>
+            <div className="flex flex-col items-center w-full px-4 overflow-y-auto">
+              <div className="text-center mb-5">
+                <h2 className="text-white text-lg font-bold tracking-wide mb-0.5">Hyfit Games 2.1</h2>
+                <p className="text-gray-400 text-xs tracking-wider uppercase">Mini Challenge</p>
+              </div>
+              <div className="text-[#EAB308] text-2xl font-bold tracking-tight uppercase mb-6">
+                {athleteName || "Unknown"}
+              </div>
 
-              <div className="bg-[#111] border border-[#333] rounded-[24px] w-full p-6 mt-4 text-left">
-                <div className="text-gray-500 text-xs font-bold tracking-widest mb-1">ATHLETE</div>
-                <div className="text-white text-2xl font-bold mb-6">{athleteName || "Unknown"} <span className="text-gray-500">#{athleteBib || "---"}</span></div>
-
-                <div className="text-gray-500 text-xs font-bold tracking-widest mb-1">TOTAL RACE TIME</div>
-                <div className="text-[#CCFF00] text-5xl font-mono mb-6">{formatRaceTime(raceElapsedMs)}</div>
-
-                <div className="text-gray-500 text-xs font-bold tracking-widest mb-1">SYNC STATUS</div>
-                <div className="text-white text-base flex items-center gap-2">
-                  <Check className={`w-5 h-5 ${hasSynced ? "text-green-500" : "text-gray-500"}`} /> {hasSynced ? "Synced to Cloud" : "Saving Locally..."}
+              <div className="grid grid-cols-2 gap-3 w-full max-w-md mb-6">
+                <div className="bg-[#1a1a1a] rounded-xl p-3 border border-[#2a2a2a]">
+                  <div className="text-gray-400 text-[11px] font-medium tracking-wider uppercase mb-0.5">Total time</div>
+                  <div className="text-white text-xl font-semibold font-mono tabular-nums">{formatRaceTime(raceElapsedMs)}</div>
                 </div>
+                <div className="bg-[#1a1a1a] rounded-xl p-3 border border-[#2a2a2a]">
+                  <div className="text-gray-400 text-[11px] font-medium tracking-wider uppercase mb-0.5">Transition time</div>
+                  <div className="text-white text-xl font-semibold font-mono tabular-nums">{formatRaceTime(totalRoxMs)}</div>
+                </div>
+              </div>
+
+              <div className="w-full max-w-2xl">
+                <h3 className="text-[#EAB308] text-base font-bold tracking-tight uppercase mb-3">Race splits</h3>
+                <div className="grid grid-cols-2 gap-2">
+                  {activities.map((act) => (
+                    <div key={act.id} className="bg-[#1a1a1a] rounded-lg p-3 border border-[#2a2a2a]">
+                      <div className="text-gray-300 text-sm font-semibold uppercase tracking-wide mb-0.5">
+                        {act.name === "Run" ? `Run ${Math.ceil(act.id / 2)}` : act.name}
+                      </div>
+                      {act.hasCounter && (act.counter || 0) > 0 && (
+                        <div className="text-gray-500 text-[11px] font-medium uppercase mb-0.5">Count: {act.counter}</div>
+                      )}
+                      <div className="text-white text-sm font-semibold font-mono tabular-nums">{formatSplitTime(act.elapsedMs)}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 mt-5 text-gray-500 text-xs">
+                <Check className={`w-3.5 h-3.5 shrink-0 ${hasSynced ? "text-green-500" : "text-gray-500"}`} />
+                {hasSynced ? "Synced to cloud" : "Saving…"}
               </div>
             </div>
           ) : (
             <>
-              <div className="text-[#CCFF00] text-base sm:text-lg uppercase tracking-[0.3em] font-extrabold mb-4 ml-1">
+              {lastCompletedActivityId != null && (() => {
+                const last = activities.find(a => a.id === lastCompletedActivityId);
+                const lastLabel = last ? (last.name === "Run" ? `Run ${Math.ceil(last.id / 2)}` : last.name) : "";
+                return lastLabel ? (
+                  <p className="text-[#CCFF00]/90 text-xs font-medium uppercase tracking-wider mb-1.5">Just completed: {lastLabel}</p>
+                ) : null;
+              })()}
+              <p className="text-[#CCFF00] text-xl sm:text-2xl uppercase tracking-widest font-bold mb-1.5">
                 {activeTarget?.kind === "activity"
                   ? (() => {
                     const a = activities.find(act => act.id === activeTarget.id);
@@ -567,14 +754,36 @@ export default function Home() {
                     return a.name === "Run" ? `Run ${Math.ceil(a.id / 2)}` : a.name;
                   })()
                   : "Transition"}
-              </div>
+              </p>
               <div
-                className={`text-[5.5rem] sm:text-[9.5rem] leading-none font-mono tracking-tighter transition-opacity duration-200 tabular-nums ${isRunning ? "text-white drop-shadow-[0_0_15px_rgba(255,255,255,0.2)]" : "text-gray-500"
-                  }`}
+                className={`text-3xl sm:text-4xl leading-none font-mono tracking-tight transition-opacity duration-200 tabular-nums ${isRunning ? "text-white" : "text-gray-500"}`}
                 style={{ fontVariantNumeric: "tabular-nums" }}
               >
                 {formatTime(timerMs)}
               </div>
+
+              {activeTarget?.kind === "activity" && activeActivity?.hasCounter && (
+                <div className="mt-5 w-full max-w-md flex items-center justify-center gap-3">
+                  <button
+                    onClick={() => bumpActiveCounter(-1)}
+                    className="w-14 h-14 rounded-xl bg-[#111] border border-[#333] text-white text-2xl font-semibold active:scale-[0.97] transition-transform leading-none"
+                    aria-label="Decrease count"
+                  >
+                    −
+                  </button>
+                  <div className="px-4 py-2.5 rounded-xl bg-[#0a0a0a] border border-[#222] min-w-[120px] text-center">
+                    <div className="text-gray-500 text-[11px] font-medium tracking-wider uppercase mb-0.5">Count</div>
+                    <div className="text-white text-2xl font-semibold font-mono tabular-nums">{activeActivity.counter || 0}</div>
+                  </div>
+                  <button
+                    onClick={() => bumpActiveCounter(1)}
+                    className="w-14 h-14 rounded-xl bg-[#CCFF00] text-black text-2xl font-bold active:scale-[0.97] transition-transform leading-none"
+                    aria-label="Increase count"
+                  >
+                    +
+                  </button>
+                </div>
+              )}
             </>
           )}
         </div>
@@ -582,7 +791,7 @@ export default function Home() {
 
       {/* The Bottom Half Action Zone */}
       {!allComplete && (
-        <div className="h-[45vh] w-full shrink-0 relative bg-[#0a0a0a] rounded-t-[40px] px-6 pt-6 pb-12 flex flex-col border-t border-[#1a1a1a]">
+        <div className="h-[42vh] min-h-[240px] w-full shrink-0 relative bg-[#0a0a0a] rounded-t-3xl px-4 sm:px-6 pt-4 pb-8 flex flex-col border-t border-[#1a1a1a]">
           {activeTarget === null ? (
             completedCount === 0 ? (
               <button
@@ -590,13 +799,13 @@ export default function Home() {
                   if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
                   selectActivity(1);
                 }}
-                className="w-full h-full bg-[#CCFF00] rounded-[32px] text-black text-4xl sm:text-5xl font-extrabold tracking-tighter active:scale-[0.96] active:bg-[#aacc00] transition-transform duration-100 flex items-center justify-center flex-col shadow-[0_0_50px_rgba(204,255,0,0.15)]"
+                className="w-full h-full bg-[#CCFF00] rounded-2xl text-black text-2xl font-bold tracking-tight active:scale-[0.98] active:bg-[#aacc00] transition-transform flex items-center justify-center flex-col gap-1"
               >
-                START RACE
-                <span className="text-black/50 text-xs sm:text-base font-bold tracking-widest mt-2">TAP TO BEGIN RUN 1</span>
+                Start race
+                <span className="text-black/60 text-xs font-medium">Tap to begin</span>
               </button>
             ) : (
-              <div className="flex-1 overflow-y-auto space-y-3 pb-8" style={{ scrollbarWidth: "none" }}>
+              <div className="flex-1 overflow-y-auto space-y-2 pb-4" style={{ scrollbarWidth: "none" }}>
                 {activities.map(act => {
                   const isCompleted = act.status === "completed";
                   const rox = roxTimes.find(r => r.afterActivityId === act.id);
@@ -608,36 +817,35 @@ export default function Home() {
                       {!isCompleted && (
                         <div
                           onClick={() => selectActivity(act.id)}
-                          className="w-full bg-[#111] border border-[#222] rounded-2xl p-4 flex items-center justify-between active:scale-[0.98] transition-all cursor-pointer"
+                          className="w-full bg-[#111] border border-[#222] rounded-xl p-3 flex items-center justify-between active:scale-[0.99] transition-all cursor-pointer"
                         >
                           <div>
-                            <div className="text-white font-bold text-xl">{act.id}. {act.name === "Run" ? `Run ${Math.ceil(act.id / 2)}` : act.name}</div>
-                            <div className="text-gray-500 text-sm">{act.value}</div>
+                            <div className="text-white font-semibold text-base">{act.id}. {act.name === "Run" ? `Run ${Math.ceil(act.id / 2)}` : act.name}</div>
+                            <div className="text-gray-500 text-xs">{act.value}</div>
                           </div>
-                          <Play className="text-[#CCFF00] w-8 h-8 opacity-50" />
+                          <Play className="text-[#CCFF00] w-6 h-6 opacity-60 shrink-0" />
                         </div>
                       )}
                       {isCompleted && rox && !isRoxCompleted && (
                         <div
                           onClick={() => selectRox(act.id)}
-                          className="w-full bg-[#111] border border-[#CCFF00]/30 rounded-2xl p-4 flex items-center justify-between active:scale-[0.98] transition-all cursor-pointer mt-3"
+                          className="w-full bg-[#111] border border-[#CCFF00]/30 rounded-xl p-3 flex items-center justify-between active:scale-[0.99] transition-all cursor-pointer mt-2"
                         >
                           <div>
-                            <div className="text-[#CCFF00] font-bold text-xl">Rox Time</div>
-                            <div className="text-gray-500 text-sm">To next station</div>
+                            <div className="text-[#CCFF00] font-semibold text-base">Rox time</div>
+                            <div className="text-gray-500 text-xs">To next station</div>
                           </div>
-                          <Play className="text-[#CCFF00] w-8 h-8 opacity-50" />
+                          <Play className="text-[#CCFF00] w-6 h-6 opacity-60 shrink-0" />
                         </div>
                       )}
                     </div>
                   )
                 })}
-                <div className="h-10"></div>
+                <div className="h-4" />
               </div>
             )
           ) : (
-            <div className="flex gap-2 w-full h-full">
-              {/* 5-Second Ghost State Reset Button mapped to a swipe visually but click mechanically for now */}
+            <div className="flex gap-2 w-full h-full min-h-0">
               <button
                 onClick={(e) => {
                   if (navigator.vibrate) navigator.vibrate([20]);
@@ -648,11 +856,26 @@ export default function Home() {
                     redoRox(activeTarget.afterActivityId);
                   }
                 }}
-                className="w-20 shrink-0 h-full bg-[#111] rounded-[32px] text-gray-500 flex items-center justify-center flex-col active:bg-[#222]"
+                className="w-14 shrink-0 h-full bg-[#111] rounded-2xl text-gray-500 flex flex-col items-center justify-center gap-1 active:bg-[#1a1a1a] transition-colors"
+                title="Reset this segment"
               >
-                <RotateCcw className="w-8 h-8 mb-2" />
-                <span className="text-[10px] font-bold tracking-widest">UNDO</span>
+                <RotateCcw className="w-6 h-6" />
+                <span className="text-[10px] font-semibold tracking-wider uppercase">Undo</span>
               </button>
+
+              {lastCompletedKind != null && (
+                <button
+                  onClick={(e) => {
+                    if (navigator.vibrate) navigator.vibrate([20]);
+                    goBackOneStep();
+                  }}
+                  className="w-14 shrink-0 h-full bg-[#1a1a1a] rounded-2xl text-amber-400/90 flex flex-col items-center justify-center gap-1 active:bg-[#222] border border-amber-500/20 transition-colors"
+                  title="Re-open last segment"
+                >
+                  <ChevronRight className="w-6 h-6 rotate-180" />
+                  <span className="text-[10px] font-semibold tracking-wider uppercase">Back</span>
+                </button>
+              )}
 
               <button
                 onClick={(e) => {
@@ -663,15 +886,42 @@ export default function Home() {
                     beginTimer(timerMs);
                   }
                 }}
-                className="flex-1 h-full bg-[#CCFF00] rounded-[32px] text-black text-4xl sm:text-5xl font-extrabold tracking-tighter active:scale-[0.96] active:bg-[#aacc00] transition-transform duration-100 flex items-center justify-center flex-col shadow-[0_0_50px_rgba(204,255,0,0.15)]"
+                className="flex-1 min-w-0 h-full bg-[#CCFF00] rounded-2xl text-black text-xl sm:text-2xl font-bold tracking-tight active:scale-[0.98] active:bg-[#aacc00] transition-transform flex flex-col items-center justify-center gap-0.5"
               >
-                {isRunning ? (activeTarget?.kind === "activity" && activeTarget.id === 12 ? "FINISH RACE" : "DONE") : "START"}
-                <span className="text-black/50 text-xs sm:text-base font-bold tracking-widest mt-2">{activeTarget?.kind === "activity" && activeTarget.id === 12 ? "FINAL STATION" : "TAP ANYWHERE"}</span>
+                {isRunning ? (activeTarget?.kind === "activity" && activeTarget.id === (activities.length > 0 ? Math.max(...activities.map((a) => a.id)) : 0) ? "Finish race" : "Done") : "Start"}
+                <span className="text-black/55 text-[11px] font-medium">{activeTarget?.kind === "activity" && activeTarget.id === (activities.length > 0 ? Math.max(...activities.map((a) => a.id)) : 0) ? "Final station" : "Tap to record"}</span>
               </button>
             </div>
           )}
         </div>
       )}
+
+      <Dialog open={adminPinDialogOpen} onOpenChange={setAdminPinDialogOpen}>
+        <DialogContent className="bg-[#111] border-[#333] text-white">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-semibold">Admin access</DialogTitle>
+            <DialogDescription className="text-sm text-gray-400">
+              Enter PIN to open the Admin panel.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <Input
+              type="password"
+              placeholder="PIN"
+              value={adminPin}
+              onChange={(e) => setAdminPin(e.target.value)}
+              className="bg-[#222] border-[#444] text-white text-base"
+              onKeyDown={(e) => e.key === "Enter" && (setAdminWithPin(adminPin) ? (setAdminPinDialogOpen(false), setAdminPin(""), (window.location.href = "/admin")) : null)}
+            />
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" size="sm" onClick={() => { setAdminPinDialogOpen(false); setAdminPin(""); }} className="border-[#444] text-gray-400 text-sm">Cancel</Button>
+            <Button size="sm" className="bg-[#CCFF00] text-black hover:bg-[#aacc00] text-sm font-semibold" onClick={() => { if (setAdminWithPin(adminPin)) { setAdminPinDialogOpen(false); setAdminPin(""); window.location.href = "/admin"; } }}>
+              Open Admin
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
