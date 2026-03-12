@@ -2,7 +2,7 @@ import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
   appId: 'com.wone.hyroxtimer',
-  appName: 'Hyrox Timer',
+  appName: 'Hyfit Games',
   webDir: 'dist/public'
 };
 

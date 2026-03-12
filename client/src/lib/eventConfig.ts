@@ -1,30 +1,16 @@
-const STORAGE_KEY = "HYFIT_EVENT_CONFIG";
+import { getEventConfigSync, type EventConfig } from "./eventService";
 
-export interface EventConfig {
-  eventName: string;
-  eventDate: string;
-  location: string;
-}
+// Re-export for backward compatibility
+export type { EventConfig };
 
-const DEFAULT: EventConfig = {
-  eventName: "Hyfit Games 2.1",
-  eventDate: "",
-  location: "",
-};
-
+/** Synchronous getter for immediate render (reads from localStorage cache) */
 export function getEventConfig(): EventConfig {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return { ...DEFAULT };
-    const parsed = JSON.parse(raw) as Partial<EventConfig>;
-    return { ...DEFAULT, ...parsed };
-  } catch {
-    return { ...DEFAULT };
-  }
+  return getEventConfigSync();
 }
 
+/** Synchronous setter for localStorage cache (used by admin before Supabase save) */
 export function setEventConfig(config: Partial<EventConfig>): void {
-  const current = getEventConfig();
+  const current = getEventConfigSync();
   const next = { ...current, ...config };
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+  localStorage.setItem("HYFIT_EVENT_CONFIG", JSON.stringify(next));
 }

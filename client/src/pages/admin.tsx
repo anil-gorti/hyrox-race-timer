@@ -2,12 +2,13 @@ import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { supabase } from "@/lib/supabase";
 import { isAdmin } from "@/lib/role";
-import { getEventConfig, setEventConfig, type EventConfig } from "@/lib/eventConfig";
+import { getEventConfig, setEventConfig } from "@/lib/eventConfig";
+import { saveEventConfig, type EventConfig } from "@/lib/eventService";
 import { Activity, getStoredActivities, DEFAULT_ACTIVITIES } from "@/lib/events";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { ArrowUp, ArrowDown, Trash2, Plus, DownloadCloud, ChevronLeft, Save, Calendar, MapPin, Type } from "lucide-react";
+import { ArrowUp, ArrowDown, Trash2, Plus, DownloadCloud, ChevronLeft, Save, Type, Lock } from "lucide-react";
 import Papa from "papaparse";
 import { useToast } from "@/hooks/use-toast";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -28,11 +29,23 @@ export default function Admin() {
     const [sheetUrl, setSheetUrl] = useState("");
     const [isSyncing, setIsSyncing] = useState(false);
     const [eventConfig, setEventConfigState] = useState<EventConfig>(getEventConfig());
+    const [isSavingEvent, setIsSavingEvent] = useState(false);
     const { toast } = useToast();
 
-    const handleSaveEventConfig = () => {
-        setEventConfig(eventConfig);
-        toast({ title: "Event saved", description: "Event details updated." });
+    const handleSaveEventConfig = async () => {
+        setIsSavingEvent(true);
+        try {
+            // Save locally first
+            setEventConfig(eventConfig);
+            // Then sync to Supabase
+            const saved = await saveEventConfig(eventConfig);
+            setEventConfigState(saved);
+            toast({ title: "Event saved", description: "Event details synced to cloud." });
+        } catch (err: any) {
+            // Local save already happened, so just warn about cloud
+            toast({ title: "Event saved locally", description: "Cloud sync failed. Changes saved locally." });
+        }
+        setIsSavingEvent(false);
     };
 
     const handleSaveEvents = () => {
@@ -77,7 +90,6 @@ export default function Admin() {
         }]);
     };
 
-    // Replace update activity logic with a helper to update a property by index
     const updateActivity = (index: number, key: keyof Activity, value: any) => {
         const newArr = [...activities];
         newArr[index] = { ...newArr[index], [key]: value };
@@ -178,12 +190,24 @@ export default function Admin() {
                             <Input
                                 value={eventConfig.location}
                                 onChange={e => setEventConfigState(prev => ({ ...prev, location: e.target.value }))}
-                                placeholder="e.g. London, UK"
+                                placeholder="e.g. HYFIT, HSR Layout"
                                 className="bg-[#1a1a1a] border-[#333] text-white focus:border-[#CCFF00] rounded-lg"
                             />
                         </div>
-                        <Button onClick={handleSaveEventConfig} className="w-full bg-[#CCFF00] hover:bg-[#aacc00] text-black font-semibold text-sm h-10">
-                            <Save className="w-4 h-4 mr-1.5" /> Save event
+                        <div>
+                            <label className="text-[11px] text-gray-400 font-medium uppercase tracking-wider block mb-1 flex items-center gap-1.5">
+                                <Lock className="w-3 h-3" /> Admin PIN
+                            </label>
+                            <Input
+                                type="text"
+                                value={eventConfig.adminPin || ""}
+                                onChange={e => setEventConfigState(prev => ({ ...prev, adminPin: e.target.value }))}
+                                placeholder="admin"
+                                className="bg-[#1a1a1a] border-[#333] text-white focus:border-[#CCFF00] rounded-lg"
+                            />
+                        </div>
+                        <Button onClick={handleSaveEventConfig} disabled={isSavingEvent} className="w-full bg-[#CCFF00] hover:bg-[#aacc00] text-black font-semibold text-sm h-10">
+                            <Save className="w-4 h-4 mr-1.5" /> {isSavingEvent ? "Saving…" : "Save event"}
                         </Button>
                     </CardContent>
                 </Card>
